@@ -398,10 +398,16 @@ def main():
     # robot = XLerobotClient(robot_config)    
 
     # For local/wired connection
-    # Set XLEROBOT_SKIP_MISSING_MOTORS=1 to tolerate a missing head/base (partial build)
-    # instead of crashing on connect -- see docs/known_issues.md in Xlerobot-improvements.
+    # Set XLEROBOT_SKIP_MISSING_MOTORS=1 to tolerate a motor that doesn't respond
+    # (partial build) instead of crashing on connect.
+    # Set XLEROBOT_DISABLE_HEAD=1 / XLEROBOT_DISABLE_BASE=1 to proactively skip the
+    # head/base even if they DO respond, and skip calibrating them.
+    # See docs/known_issues.md in Xlerobot-improvements.
     robot_config = XLerobotConfig(
+        id=os.environ.get("XLEROBOT_ID", "my_xlerobot"),
         skip_missing_motors=os.environ.get("XLEROBOT_SKIP_MISSING_MOTORS") == "1",
+        disable_head=os.environ.get("XLEROBOT_DISABLE_HEAD") == "1",
+        disable_base=os.environ.get("XLEROBOT_DISABLE_BASE") == "1",
     )
     robot = XLerobot(robot_config)
     

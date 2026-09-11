@@ -61,6 +61,13 @@ class XLerobotConfig(RobotConfig):
     # actions for the rest of the session; a warning is logged for each one skipped.
     skip_missing_motors: bool = False
 
+    # Proactively exclude the head/base motors even if they DO respond -- unlike
+    # skip_missing_motors (which only reacts to a motor that fails to answer), these
+    # skip the head/base outright: no handshake expectation, no calibration prompt for
+    # them. Use when you have the hardware but don't want to deal with it right now.
+    disable_head: bool = False
+    disable_base: bool = False
+
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
     # the number of motors in your follower arms.

@@ -126,6 +126,13 @@ class XLerobot(Robot):
             },
             calibration=calibration2,
         )
+        if config.disable_head:
+            for name in ("head_motor_1", "head_motor_2"):
+                self.bus1.motors.pop(name, None)
+        if config.disable_base:
+            for name in ("base_left_wheel", "base_back_wheel", "base_right_wheel"):
+                self.bus2.motors.pop(name, None)
+
         self.left_arm_motors = [motor for motor in self.bus1.motors if motor.startswith("left_arm")]
         self.right_arm_motors = [motor for motor in self.bus2.motors if motor.startswith("right_arm")]
         self.head_motors = [motor for motor in self.bus1.motors if motor.startswith("head")]
@@ -262,17 +269,18 @@ class XLerobot(Robot):
         logger.info(f"\nRunning calibration of {self}")
         ## calib left motors
         left_motors = self.left_arm_motors + self.head_motors
+        left_label = "left arm and head motors" if self.head_motors else "left arm motors"
         self.bus1.disable_torque()
         for name in left_motors:
             self.bus1.write("Operating_Mode", name, OperatingMode.POSITION.value)
         input(
-            "Move left arm and head motors to the middle of their range of motion and press ENTER...."
+            f"Move {left_label} to the middle of their range of motion and press ENTER...."
         )
         homing_offsets = self.bus1.set_half_turn_homings(left_motors)
         homing_offsets.update(dict.fromkeys(self.right_arm_motors + self.base_motors, 0))
-        
+
         print(
-            f"Move all left arm and head joints sequentially through their "
+            f"Move all {left_label.replace('motors', 'joints')} sequentially through their "
             "entire ranges of motion.\nRecording positions. Press ENTER to stop..."
         )
         range_mins, range_maxes = self.bus1.record_ranges_of_motion(left_motors)
