@@ -127,11 +127,9 @@ class XLerobot(Robot):
             calibration=calibration2,
         )
         if config.disable_head:
-            for name in ("head_motor_1", "head_motor_2"):
-                self.bus1.motors.pop(name, None)
+            self._drop_motors(self.bus1, ["head_motor_1", "head_motor_2"])
         if config.disable_base:
-            for name in ("base_left_wheel", "base_back_wheel", "base_right_wheel"):
-                self.bus2.motors.pop(name, None)
+            self._drop_motors(self.bus2, ["base_left_wheel", "base_back_wheel", "base_right_wheel"])
 
         self.left_arm_motors = [motor for motor in self.bus1.motors if motor.startswith("left_arm")]
         self.right_arm_motors = [motor for motor in self.bus2.motors if motor.startswith("right_arm")]
@@ -184,6 +182,21 @@ class XLerobot(Robot):
             cam.is_connected for cam in self.cameras.values()
         )
 
+    @staticmethod
+    def _drop_motors(bus: FeetechMotorsBus, names: list[str]) -> None:
+        """Remove motors from a bus's active set.
+
+        `MotorsBus.ids`/`.models`/`._has_different_ctrl_tables` are `@cached_property`s
+        computed once from `bus.motors` and cached on first access (which happens as
+        early as the bus's own `__init__`). Popping from `bus.motors` alone leaves those
+        stale, so later handshakes/reads/writes keep using the pre-removal id list --
+        clear the cache too so it recomputes from the now-pruned motor set.
+        """
+        for name in names:
+            bus.motors.pop(name, None)
+        for cached_attr in ("ids", "models", "_has_different_ctrl_tables"):
+            bus.__dict__.pop(cached_attr, None)
+
     def _connect_bus_tolerant(self, bus: FeetechMotorsBus) -> None:
         """Connect a bus; if config.skip_missing_motors is set, a motor-check failure
         drops the unresponsive motors instead of aborting the whole connection."""
@@ -200,14 +213,14 @@ class XLerobot(Robot):
                 raise
             # bus.connect() already opened the port before the handshake failed, so the
             # port itself is usable -- just drop the unresponsive motors and finish setup.
-            for name, motor in list(bus.motors.items()):
-                if motor.id in missing_ids:
-                    logger.warning(
-                        f"{self}: motor '{name}' (id {motor.id}) not found on {bus.port} -- "
-                        f"skipping (skip_missing_motors=True). It will be absent from "
-                        f"observations/actions for this session."
-                    )
-                    del bus.motors[name]
+            missing_names = [name for name, motor in bus.motors.items() if motor.id in missing_ids]
+            for name in missing_names:
+                logger.warning(
+                    f"{self}: motor '{name}' (id {bus.motors[name].id}) not found on {bus.port} -- "
+                    f"skipping (skip_missing_motors=True). It will be absent from "
+                    f"observations/actions for this session."
+                )
+            self._drop_motors(bus, missing_names)
             bus.set_timeout()
 
     def connect(self, calibrate: bool = True) -> None:
