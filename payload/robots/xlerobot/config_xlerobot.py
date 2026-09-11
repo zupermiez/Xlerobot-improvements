@@ -55,6 +55,12 @@ class XLerobotConfig(RobotConfig):
     port2: str = "/dev/ttyACM1"  # port to connect to the bus (same as lekiwi setup)
     disable_torque_on_disconnect: bool = True
 
+    # If True, a motor that doesn't respond during connect() is dropped instead of
+    # raising and aborting the whole connection -- useful for a partial build (e.g. no
+    # head, or no mobile base yet). Dropped motors are simply absent from observations/
+    # actions for the rest of the session; a warning is logged for each one skipped.
+    skip_missing_motors: bool = False
+
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
     # the number of motors in your follower arms.

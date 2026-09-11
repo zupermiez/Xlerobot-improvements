@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import logging
+import re
 import time
 from functools import cached_property
 from itertools import chain
@@ -176,13 +177,45 @@ class XLerobot(Robot):
             cam.is_connected for cam in self.cameras.values()
         )
 
+    def _connect_bus_tolerant(self, bus: FeetechMotorsBus) -> None:
+        """Connect a bus; if config.skip_missing_motors is set, a motor-check failure
+        drops the unresponsive motors instead of aborting the whole connection."""
+        try:
+            bus.connect()
+        except RuntimeError as e:
+            if not self.config.skip_missing_motors:
+                raise
+            # Only handle the "missing motor" case -- a motor that responds with the
+            # wrong model number indicates real miswiring, not an absent/optional part,
+            # so that still raises.
+            missing_ids = {int(m) for m in re.findall(r"-\s+(\d+)\s+\(expected model", str(e))}
+            if not missing_ids:
+                raise
+            # bus.connect() already opened the port before the handshake failed, so the
+            # port itself is usable -- just drop the unresponsive motors and finish setup.
+            for name, motor in list(bus.motors.items()):
+                if motor.id in missing_ids:
+                    logger.warning(
+                        f"{self}: motor '{name}' (id {motor.id}) not found on {bus.port} -- "
+                        f"skipping (skip_missing_motors=True). It will be absent from "
+                        f"observations/actions for this session."
+                    )
+                    del bus.motors[name]
+            bus.set_timeout()
+
     def connect(self, calibrate: bool = True) -> None:
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
-        self.bus1.connect()
-        self.bus2.connect()
-        
+        self._connect_bus_tolerant(self.bus1)
+        self._connect_bus_tolerant(self.bus2)
+
+        # Motor dicts may have shrunk above -- refresh the derived per-group name lists.
+        self.left_arm_motors = [motor for motor in self.bus1.motors if motor.startswith("left_arm")]
+        self.right_arm_motors = [motor for motor in self.bus2.motors if motor.startswith("right_arm")]
+        self.head_motors = [motor for motor in self.bus1.motors if motor.startswith("head")]
+        self.base_motors = [motor for motor in self.bus2.motors if motor.startswith("base")]
+
         # Check if calibration file exists and ask user if they want to restore it
         if self.calibration_fpath.is_file():
             logger.info(f"Calibration file found at {self.calibration_fpath}")
@@ -533,7 +566,10 @@ class XLerobot(Robot):
         The head pan/tilt joints share bus1 with the left arm but are non-critical
         for teleop, so a dropped sync_read here shouldn't kill the whole session.
         Falls back to the last known-good reading (or 0.0 the very first time).
+        Returns {} if the head motors were dropped entirely (skip_missing_motors).
         """
+        if not self.head_motors:
+            return {}
         try:
             head_pos = self.bus1.sync_read("Present_Position", self.head_motors)
             self._last_head_pos = head_pos
@@ -541,6 +577,26 @@ class XLerobot(Robot):
         except ConnectionError as e:
             logger.warning(f"{self}: head motors (ids 7/8) unreachable, holding last position: {e}")
             return self._last_head_pos or dict.fromkeys(self.head_motors, 0.0)
+
+    def _read_base_vel_soft(self) -> dict[str, float]:
+        """Read base wheel velocities, tolerating a partial/missing mobile base.
+
+        Requires all three wheels to compute a meaningful body velocity; if any are
+        missing (skip_missing_motors dropped them, or a flaky connection this cycle),
+        reports zero velocity instead of raising.
+        """
+        if len(self.base_motors) < 3:
+            return {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}
+        try:
+            base_wheel_vel = self.bus2.sync_read("Present_Velocity", self.base_motors)
+        except ConnectionError as e:
+            logger.warning(f"{self}: base wheels unreachable, reporting zero velocity: {e}")
+            return {"x.vel": 0.0, "y.vel": 0.0, "theta.vel": 0.0}
+        return self._wheel_raw_to_body(
+            base_wheel_vel["base_left_wheel"],
+            base_wheel_vel["base_back_wheel"],
+            base_wheel_vel["base_right_wheel"],
+        )
 
     def get_observation(self) -> dict[str, Any]:
         if not self.is_connected:
@@ -551,14 +607,8 @@ class XLerobot(Robot):
         left_arm_pos = self.bus1.sync_read("Present_Position", self.left_arm_motors)
         right_arm_pos = self.bus2.sync_read("Present_Position", self.right_arm_motors)
         head_pos = self._read_head_pos_soft()
-        base_wheel_vel = self.bus2.sync_read("Present_Velocity", self.base_motors)
+        base_vel = self._read_base_vel_soft()
 
-        base_vel = self._wheel_raw_to_body(
-            base_wheel_vel["base_left_wheel"],
-            base_wheel_vel["base_back_wheel"],
-            base_wheel_vel["base_right_wheel"],
-        )
-        
         left_arm_state = {f"{k}.pos": v for k, v in left_arm_pos.items()}
         right_arm_state = {f"{k}.pos": v for k, v in right_arm_pos.items()}
         head_state = {f"{k}.pos": v for k, v in head_pos.items()}
@@ -602,13 +652,21 @@ class XLerobot(Robot):
         left_arm_pos = {k: v for k, v in action.items() if k.startswith("left_arm_") and k.endswith(".pos")}
         right_arm_pos = {k: v for k, v in action.items() if k.startswith("right_arm_") and k.endswith(".pos")}
         head_pos = {k: v for k, v in action.items() if k.startswith("head_") and k.endswith(".pos")}
+        # Drop any head target the caller still sends if head motors were skipped
+        # (skip_missing_motors) -- there's nothing to write it to.
+        head_pos = {k: v for k, v in head_pos.items() if k.replace(".pos", "") in self.head_motors}
         base_goal_vel = {k: v for k, v in action.items() if k.endswith(".vel")}
-        base_wheel_goal_vel = self._body_to_wheel_raw(
-            base_goal_vel.get("x.vel", 0.0),
-            base_goal_vel.get("y.vel", 0.0),
-            base_goal_vel.get("theta.vel", 0.0),
-        )
-        
+        # Wheel kinematics need all three wheels; a partial/missing base can't take a
+        # meaningful velocity command, so skip it entirely rather than drive 1-2 wheels.
+        if len(self.base_motors) == 3:
+            base_wheel_goal_vel = self._body_to_wheel_raw(
+                base_goal_vel.get("x.vel", 0.0),
+                base_goal_vel.get("y.vel", 0.0),
+                base_goal_vel.get("theta.vel", 0.0),
+            )
+        else:
+            base_wheel_goal_vel = {}
+
         
         if self.config.max_relative_target is not None:
             # Read present positions for left arm, right arm, and head
@@ -654,6 +712,8 @@ class XLerobot(Robot):
         }
 
     def stop_base(self):
+        if not self.base_motors:
+            return
         self.bus2.sync_write("Goal_Velocity", dict.fromkeys(self.base_motors, 0), num_retry=5)
         logger.info("Base motors stopped")
 
