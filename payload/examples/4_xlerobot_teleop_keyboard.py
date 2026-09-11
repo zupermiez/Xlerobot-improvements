@@ -8,6 +8,7 @@ PYTHONPATH=src python -m lerobot.robots.xlerobot.xlerobot_host --robot.id=my_xle
 PYTHONPATH=src python -m examples.xlerobot.teleoperate_Keyboard
 '''
 
+import os
 import time
 import numpy as np
 import math
@@ -397,7 +398,11 @@ def main():
     # robot = XLerobotClient(robot_config)    
 
     # For local/wired connection
-    robot_config = XLerobotConfig()
+    # Set XLEROBOT_SKIP_MISSING_MOTORS=1 to tolerate a missing head/base (partial build)
+    # instead of crashing on connect -- see docs/known_issues.md in Xlerobot-improvements.
+    robot_config = XLerobotConfig(
+        skip_missing_motors=os.environ.get("XLEROBOT_SKIP_MISSING_MOTORS") == "1",
+    )
     robot = XLerobot(robot_config)
     
     try:

@@ -16,6 +16,7 @@ PYTHONPATH=src python -m examples.xlerobot.teleoperate_joycon
 #   * BASE_DECELERATION_RATE: deceleration slope (speed/second)
 #   * BASE_MAX_SPEED: maximum speed multiplier
 
+import os
 import time
 import numpy as np
 import math
@@ -421,7 +422,12 @@ def main():
     
     # Try to use saved calibration file to avoid recalibrating each time
     # You can modify robot_id here to match your robot configuration
-    robot_config = XLerobotConfig(id="my_xlerobot")  # Can be modified to your robot ID
+    # Set XLEROBOT_SKIP_MISSING_MOTORS=1 to tolerate a missing head/base (partial build)
+    # instead of crashing on connect -- see docs/known_issues.md in Xlerobot-improvements.
+    robot_config = XLerobotConfig(
+        id="my_xlerobot",  # Can be modified to your robot ID
+        skip_missing_motors=os.environ.get("XLEROBOT_SKIP_MISSING_MOTORS") == "1",
+    )
     robot = XLerobot(robot_config)
     
     try:
