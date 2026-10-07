@@ -59,6 +59,16 @@ mkdir -p lerobot/src/lerobot/robots/xlerobot
 cp "$REPO_ROOT"/payload/robots/xlerobot/*.py lerobot/src/lerobot/robots/xlerobot/
 mkdir -p lerobot/src/lerobot/model
 cp "$REPO_ROOT"/payload/model/SO101Robot.py lerobot/src/lerobot/model/
+# 2-wheel (differential drive) variant, with the bus1-configure + wheel-torque fixes
+mkdir -p lerobot/src/lerobot/robots/xlerobot_2wheels
+cp "$REPO_ROOT"/payload/robots/xlerobot_2wheels/*.py "$REPO_ROOT"/payload/robots/xlerobot_2wheels/README.md \
+    lerobot/src/lerobot/robots/xlerobot_2wheels/
+# The 2-wheel class + examples import precise_sleep; older lerobot (<=0.4.1) only has busy_wait
+if ! grep -q "precise_sleep" lerobot/src/lerobot/utils/robot_utils.py; then
+    printf '\n\nprecise_sleep = busy_wait\n' >> lerobot/src/lerobot/utils/robot_utils.py
+fi
+# Claude Code context for sessions opened inside the lerobot checkout
+cp "$REPO_ROOT"/payload/CLAUDE.lerobot.md lerobot/CLAUDE.md
 
 echo "==> 5/7 joycon-robotics (kernel driver + joycond + udev rules)"
 if [ ! -d joycon-robotics ]; then
@@ -89,10 +99,12 @@ can't be scripted -- see docs/joycon_teleop_setup.md for details:
        python Xlerobot-improvements-examples/joycon_test_read_CN.py
   3. Plug in / power on the motor control boards, then:
        ls /dev/ttyACM0 /dev/ttyACM1
-       python lerobot/find_port.py     # confirm port -> arm mapping
+       lerobot-find-port               # confirm port -> arm mapping
      (defaults: port1=/dev/ttyACM0=left arm+head, port2=/dev/ttyACM1=right arm+base;
       edit lerobot/src/lerobot/robots/xlerobot/config_xlerobot.py if swapped)
   4. Run teleop (first run walks through calibration for robot id my_xlerobot):
        python Xlerobot-improvements-examples/7_xlerobot_teleop_joycon.py
+     2-wheel (differential drive) base instead of 3 omniwheels:
+       python Xlerobot-improvements-examples/7_xlerobot_2wheels_teleop_joycon.py
 ==================================================================
 EOF

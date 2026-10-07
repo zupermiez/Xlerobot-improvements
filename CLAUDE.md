@@ -59,9 +59,12 @@ scripts/install.sh   — automated setup (system deps, conda, lerobot,
                         joycon-robotics, drops in payload/)
 scripts/verify.sh    — diagnostic health check
 payload/robots/xlerobot/       — XLerobot robot class (patched)
+payload/robots/xlerobot_2wheels/ — 2-wheel differential-drive variant (patched)
 payload/model/SO101Robot.py    — analytical IK solver dependency
 payload/joyconrobotics_override/ — XLeRobot's modified joyconrobotics files
-payload/examples/              — teleop entry-point scripts
+payload/examples/              — teleop entry-point scripts (3-omniwheel + 2wheels)
+payload/CLAUDE.lerobot.md      — installed as lerobot/CLAUDE.md (context for
+                                 sessions opened in the lerobot checkout)
 docs/joycon_teleop_setup.md    — full Joy-Con recipe + manual steps
 docs/keyboard_teleop_setup.md  — keyboard teleop recipe
 docs/known_issues.md           — bugs found + fixes applied

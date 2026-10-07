@@ -105,3 +105,21 @@ This is expected behavior, not a bug.
 The upstream XLeRobot docs mention `joycon_test_read.py` for the
 connectivity sanity check; the file that actually exists (Chinese
 comments, English output) is `joycon_test_read_CN.py`. Use that one.
+
+## 2-wheel base: wheels don't drive / left arm + head misconfigured
+
+Applies to the `xlerobot_2wheels` (differential drive) variant, wheels
+IDs 9 (left) and 10 (right) on `bus2` / `/dev/ttyACM1`.
+
+Two bugs in upstream XLeRobot's `xlerobot_2wheels.py` `configure()`,
+both fixed in `payload/robots/xlerobot_2wheels/xlerobot_2wheels.py`:
+
+- It called `self.bus2.configure_motors()` twice and never configured
+  `bus1` (left arm + head). Now configures `bus1` and `bus2`.
+- `self.bus2.enable_torque()` also tried to set the Lock register on the
+  wheel motors, which run in velocity mode and don't support it. Torque
+  is now enabled for the right-arm motors only on `bus2`.
+
+The 2-wheel class and its examples import `precise_sleep` from
+`lerobot.utils.robot_utils`, which lerobot <=0.4.1 doesn't have —
+`install.sh` appends a `precise_sleep = busy_wait` alias if it's missing.
