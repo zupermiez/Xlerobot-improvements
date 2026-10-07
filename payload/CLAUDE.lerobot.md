@@ -66,6 +66,7 @@ python examples/7_xlerobot_2wheels_teleop_joycon_smooth.py # same, with smoothed
 python examples/4_xlerobot_2wheels_teleop_keyboard.py      # 2-wheel, keyboard
 python examples/7_xlerobot_teleop_joycon.py                # 3-omniwheel, Joy-Con (id my_xlerobot)
 python examples/joycon_test_read_CN.py                     # Joy-Con connectivity check only
+python examples/joycon_connect_test.py                     # connect + hold one L and one R Joy-Con (run before teleop)
 ```
 
 Pick the `xlerobot_2wheels` scripts for a robot with 2 base wheels — the
@@ -74,7 +75,11 @@ Pick the `xlerobot_2wheels` scripts for a robot with 2 base wheels — the
 ## Gotchas
 
 - **Joy-Cons drop off Bluetooth when idle.** Pairing persists; the connection
-  doesn't. `bluetoothctl connect <mac>` or press a button. Check
+  doesn't. Run `python examples/joycon_connect_test.py` (tries every paired
+  Joy-Con, reconnects until one L + one R are streaming, sets LEDs), or
+  `bluetoothctl connect <mac>`. For first-time pairing + BlueZ auto-reconnect
+  config: `sudo bash ../joycon-robotics/joycon-robotics/script/auto_setup_joycon.sh`
+  (upstream script — path may be `../joycon-robotics/script/` on a fresh install). Check
   `/sys/class/hidraw/*/device/uevent` (`HID_NAME`) to see which are live.
   Don't hardcode Joy-Con MACs in code — each controller pair differs.
 - **Joy-Con hidraw permissions** come from `/etc/udev/rules.d/99-nitendo.rules`

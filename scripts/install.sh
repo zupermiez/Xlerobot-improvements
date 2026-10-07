@@ -85,6 +85,7 @@ cp "$REPO_ROOT"/payload/joyconrobotics_override/*.py joycon-robotics/joyconrobot
 echo "==> 7/7 Copy example scripts into place for quick access"
 mkdir -p Xlerobot-improvements-examples
 cp "$REPO_ROOT"/payload/examples/*.py Xlerobot-improvements-examples/
+cp "$REPO_ROOT"/payload/examples/*.py lerobot/examples/   # paths used in lerobot/CLAUDE.md
 
 cat <<'EOF'
 
@@ -94,9 +95,12 @@ can't be scripted -- see docs/joycon_teleop_setup.md for details:
 
   1. Pair each Joy-Con over Bluetooth (sync button -> bluetoothctl
      pair -> press L+R together to confirm).
-  2. Run the connectivity check:
+  2. Connect both Joy-Cons and check they stream input (retries until
+     one L + one R hold; also sets player LEDs):
        conda activate lerobot
-       python Xlerobot-improvements-examples/joycon_test_read_CN.py
+       python Xlerobot-improvements-examples/joycon_connect_test.py
+     (optional: sudo bash joycon-robotics/script/auto_setup_joycon.sh
+      pairs + enables BlueZ auto-reconnect)
   3. Plug in / power on the motor control boards, then:
        ls /dev/ttyACM0 /dev/ttyACM1
        lerobot-find-port               # confirm port -> arm mapping
